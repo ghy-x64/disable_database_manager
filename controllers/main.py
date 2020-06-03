@@ -1,17 +1,47 @@
-import odoo.http as http
-import odoo
-from odoo import SUPERUSER_ID
-from odoo import _
-from odoo.http import request
-from odoo.exceptions import AccessError
-from odoo.http import Response
-from datetime import datetime, date, timedelta
-from threading import current_thread
-from odoo.addons.web.controllers.main import Database
+import ast
+import base64
+import csv
+import functools
+import glob
+import itertools
+import jinja2
+import logging
+import operator
+import datetime
+import hashlib
+import os
+import re
+import simplejson
+import sys
+import time
+import urllib2
+import zlib
+from xml.etree import ElementTree
+from cStringIO import StringIO
+
+import babel.messages.pofile
+import werkzeug.utils
+import werkzeug.wrappers
+try:
+    import xlwt
+except ImportError:
+    xlwt = None
+
+import openerp
+import openerp.modules.registry
+from openerp.addons.base.ir.ir_qweb import AssetsBundle, QWebTemplateNotFound
+from openerp.modules import get_module_resource
+from openerp.tools import topological_sort
+from openerp.tools.translate import _
+from openerp.tools import ustr
+from openerp import http
+from openerp.http import Response
+
+from openerp.http import request, serialize_exception as _serialize_exception
+from openerp.addons.web.controllers.main import Database, env, module_boot
 
 import logging
 _logger = logging.getLogger(__name__)
-
 
 class Database(Database):
 
@@ -19,26 +49,102 @@ class Database(Database):
     def manager(self, **kw):
         parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
         if len(parameters) > 0:
-            remote_addr = current_thread().environ["REMOTE_ADDR"]
-            if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
-                x_forwarded_for_addr = current_thread().environ["HTTP_X_FORWARDED_FOR"]
+            remote_addr = request.httprequest.environ["REMOTE_ADDR"]
+            if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
+                x_forwarded_for_addr = request.httprequest.environ["HTTP_X_FORWARDED_FOR"]
                 if x_forwarded_for_addr:
                     remote_addr = x_forwarded_for_addr
             _logger.info('remote_addr : ' + str(remote_addr))
             if remote_addr not in parameters.value:
                 _logger.info('unauthorized remote_addr : ' + str(remote_addr))
                 return Response("Not authorized", status=400)
-        request._cr = None
-        return self._render_template()
+        # TODO: migrate the webclient's database manager to server side views
+        request.session.logout()
+        return env.get_template("database_manager.html").render({
+            'modules': simplejson.dumps(module_boot()),
+        })
 
-
-    @http.route('/web/database/create', type='http', auth="none", methods=['POST'], csrf=False)
-    def create(self, master_pwd, name, lang, password, **post):
+    @http.route('/web/database/create', type='json', auth="none")
+    def create(self, fields):
         parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
         if len(parameters) > 0:
-            remote_addr = current_thread().environ["REMOTE_ADDR"]
-            if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
-                x_forwarded_for_addr = current_thread().environ["HTTP_X_FORWARDED_FOR"]
+            remote_addr = request.httprequest.environ["REMOTE_ADDR"]
+            if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
+                x_forwarded_for_addr = request.httprequest.environ["HTTP_X_FORWARDED_FOR"]
+                if x_forwarded_for_addr:
+                    remote_addr = x_forwarded_for_addr
+            _logger.info('remote_addr : ' + str(remote_addr))
+            if remote_addr not in parameters.value:
+                _logger.info('unauthorized remote_addr : ' + str(remote_addr))
+                return Response("Not authorized", status=400)
+        params = dict(map(operator.itemgetter('name', 'value'), fields))
+        db_created = request.session.proxy("db").create_database(
+            params['super_admin_pwd'],
+            params['db_name'],
+            bool(params.get('demo_data')),
+            params['db_lang'],
+            params['create_admin_pwd'])
+        if db_created:
+            request.session.authenticate(params['db_name'], 'admin', params['create_admin_pwd'])
+        return db_created
+
+    @http.route('/web/database/duplicate', type='json', auth="none")
+    def duplicate(self, fields):
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        if len(parameters) > 0:
+            remote_addr = request.httprequest.environ["REMOTE_ADDR"]
+            if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
+                x_forwarded_for_addr = request.httprequest.environ["HTTP_X_FORWARDED_FOR"]
+                if x_forwarded_for_addr:
+                    remote_addr = x_forwarded_for_addr
+            _logger.info('remote_addr : ' + str(remote_addr))
+            if remote_addr not in parameters.value:
+                _logger.info('unauthorized remote_addr : ' + str(remote_addr))
+                return Response("Not authorized", status=400)
+        params = dict(map(operator.itemgetter('name', 'value'), fields))
+        duplicate_attrs = (
+            params['super_admin_pwd'],
+            params['db_original_name'],
+            params['db_name'],
+        )
+
+        return request.session.proxy("db").duplicate_database(*duplicate_attrs)
+
+
+    @http.route('/web/database/drop', type='json', auth="none")
+    def drop(self, fields):
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        if len(parameters) > 0:
+            remote_addr = request.httprequest.environ["REMOTE_ADDR"]
+            if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
+                x_forwarded_for_addr = request.httprequest.environ["HTTP_X_FORWARDED_FOR"]
+                if x_forwarded_for_addr:
+                    remote_addr = x_forwarded_for_addr
+            _logger.info('remote_addr : ' + str(remote_addr))
+            if remote_addr not in parameters.value:
+                _logger.info('unauthorized remote_addr : ' + str(remote_addr))
+                return Response("Not authorized", status=400)
+        password, db = operator.itemgetter(
+            'drop_pwd', 'drop_db')(
+                dict(map(operator.itemgetter('name', 'value'), fields)))
+
+        try:
+            if request.session.proxy("db").drop(password, db):
+                return True
+            else:
+                return False
+        except openerp.exceptions.AccessDenied:
+            return {'error': 'AccessDenied', 'title': 'Drop Database'}
+        except Exception:
+            return {'error': _('Could not drop database !'), 'title': _('Drop Database')}
+
+    @http.route('/web/database/backup', type='http', auth="none")
+    def backup(self, backup_db, backup_pwd, token, backup_format='zip'):
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        if len(parameters) > 0:
+            remote_addr = request.httprequest.environ["REMOTE_ADDR"]
+            if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
+                x_forwarded_for_addr = request.httprequest.environ["HTTP_X_FORWARDED_FOR"]
                 if x_forwarded_for_addr:
                     remote_addr = x_forwarded_for_addr
             _logger.info('remote_addr : ' + str(remote_addr))
@@ -46,96 +152,28 @@ class Database(Database):
                 _logger.info('unauthorized remote_addr : ' + str(remote_addr))
                 return Response("Not authorized", status=400)
         try:
-            if not re.match(DBNAME_PATTERN, name):
-                raise Exception(_('Invalid database name. Only alphanumerical characters, underscore, hyphen and dot are allowed.'))
-            # country code could be = "False" which is actually True in python
-            country_code = post.get('country_code') or False
-            dispatch_rpc('db', 'create_database', [master_pwd, name, bool(post.get('demo')), lang, password, post['login'], country_code])
-            request.session.authenticate(name, post['login'], password)
-            return http.local_redirect('/web/')
-        except Exception as e:
-            error = "Database creation error: %s" % (str(e) or repr(e))
-        return self._render_template(error=error)
-
-    @http.route('/web/database/duplicate', type='http', auth="none", methods=['POST'], csrf=False)
-    def duplicate(self, master_pwd, name, new_name):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
-        if len(parameters) > 0:
-            remote_addr = current_thread().environ["REMOTE_ADDR"]
-            if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
-                x_forwarded_for_addr = current_thread().environ["HTTP_X_FORWARDED_FOR"]
-                if x_forwarded_for_addr:
-                    remote_addr = x_forwarded_for_addr
-            _logger.info('remote_addr : ' + str(remote_addr))
-            if remote_addr not in parameters.value:
-                _logger.info('unauthorized remote_addr : ' + str(remote_addr))
-                return Response("Not authorized", status=400)
-        try:
-            if not re.match(DBNAME_PATTERN, new_name):
-                raise Exception(_('Invalid database name. Only alphanumerical characters, underscore, hyphen and dot are allowed.'))
-            dispatch_rpc('db', 'duplicate_database', [master_pwd, name, new_name])
-            return http.local_redirect('/web/database/manager')
-        except Exception as e:
-            error = "Database duplication error: %s" % (str(e) or repr(e))
-            return self._render_template(error=error)
-
-    @http.route('/web/database/drop', type='http', auth="none", methods=['POST'], csrf=False)
-    def drop(self, master_pwd, name):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
-        if len(parameters) > 0:
-            remote_addr = current_thread().environ["REMOTE_ADDR"]
-            if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
-                x_forwarded_for_addr = current_thread().environ["HTTP_X_FORWARDED_FOR"]
-                if x_forwarded_for_addr:
-                    remote_addr = x_forwarded_for_addr
-            _logger.info('remote_addr : ' + str(remote_addr))
-            if remote_addr not in parameters.value:
-                _logger.info('unauthorized remote_addr : ' + str(remote_addr))
-                return Response("Not authorized", status=400)
-        try:
-            dispatch_rpc('db','drop', [master_pwd, name])
-            request._cr = None  # dropping a database leads to an unusable cursor
-            return http.local_redirect('/web/database/manager')
-        except Exception as e:
-            error = "Database deletion error: %s" % (str(e) or repr(e))
-            return self._render_template(error=error)
-
-    @http.route('/web/database/backup', type='http', auth="none", methods=['POST'], csrf=False)
-    def backup(self, master_pwd, name, backup_format = 'zip'):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
-        if len(parameters) > 0:
-            remote_addr = current_thread().environ["REMOTE_ADDR"]
-            if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
-                x_forwarded_for_addr = current_thread().environ["HTTP_X_FORWARDED_FOR"]
-                if x_forwarded_for_addr:
-                    remote_addr = x_forwarded_for_addr
-            _logger.info('remote_addr : ' + str(remote_addr))
-            if remote_addr not in parameters.value:
-                _logger.info('unauthorized remote_addr : ' + str(remote_addr))
-                return Response("Not authorized", status=400)
-        try:
-            odoo.service.db.check_super(master_pwd)
+            openerp.service.security.check_super(backup_pwd)
             ts = datetime.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
-            filename = "%s_%s.%s" % (name, ts, backup_format)
+            filename = "%s_%s.%s" % (backup_db, ts, backup_format)
             headers = [
                 ('Content-Type', 'application/octet-stream; charset=binary'),
                 ('Content-Disposition', content_disposition(filename)),
             ]
-            dump_stream = odoo.service.db.dump_db(name, None, backup_format)
+            dump_stream = openerp.service.db.dump_db(backup_db, None, backup_format)
             response = werkzeug.wrappers.Response(dump_stream, headers=headers, direct_passthrough=True)
+            response.set_cookie('fileToken', token)
             return response
-        except Exception as e:
+        except Exception, e:
             _logger.exception('Database.backup')
-            error = "Database backup error: %s" % (str(e) or repr(e))
-            return self._render_template(error=error)
+            return simplejson.dumps([[],[{'error': openerp.tools.ustr(e), 'title': _('Backup Database')}]])
 
-    @http.route('/web/database/restore', type='http', auth="none", methods=['POST'], csrf=False)
-    def restore(self, master_pwd, backup_file, name, copy=False):
+    @http.route('/web/database/restore', type='http', auth="none")
+    def restore(self, db_file, restore_pwd, new_db, mode):
         parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
         if len(parameters) > 0:
-            remote_addr = current_thread().environ["REMOTE_ADDR"]
-            if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
-                x_forwarded_for_addr = current_thread().environ["HTTP_X_FORWARDED_FOR"]
+            remote_addr = request.httprequest.environ["REMOTE_ADDR"]
+            if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
+                x_forwarded_for_addr = request.httprequest.environ["HTTP_X_FORWARDED_FOR"]
                 if x_forwarded_for_addr:
                     remote_addr = x_forwarded_for_addr
             _logger.info('remote_addr : ' + str(remote_addr))
@@ -143,35 +181,32 @@ class Database(Database):
                 _logger.info('unauthorized remote_addr : ' + str(remote_addr))
                 return Response("Not authorized", status=400)
         try:
-            data_file = None
-            db.check_super(master_pwd)
-            with tempfile.NamedTemporaryFile(delete=False) as data_file:
-                backup_file.save(data_file)
-            db.restore_db(name, data_file.name, str2bool(copy))
-            return http.local_redirect('/web/database/manager')
-        except Exception as e:
-            error = "Database restore error: %s" % (str(e) or repr(e))
-            return self._render_template(error=error)
-        finally:
-            if data_file:
-                os.unlink(data_file.name)
+            copy = mode == 'copy'
+            data = base64.b64encode(db_file.read())
+            request.session.proxy("db").restore(restore_pwd, new_db, data, copy)
+            return ''
+        except openerp.exceptions.AccessDenied, e:
+            raise Exception("AccessDenied")
 
-    @http.route('/web/database/change_password', type='http', auth="none", methods=['POST'], csrf=False)
-    def change_password(self, master_pwd, master_pwd_new):
+    @http.route('/web/database/change_password', type='json', auth="none")
+    def change_password(self, fields):
         parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
         if len(parameters) > 0:
-            remote_addr = current_thread().environ["REMOTE_ADDR"]
-            if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
-                x_forwarded_for_addr = current_thread().environ["HTTP_X_FORWARDED_FOR"]
+            remote_addr = request.httprequest.environ["REMOTE_ADDR"]
+            if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
+                x_forwarded_for_addr = request.httprequest.environ["HTTP_X_FORWARDED_FOR"]
                 if x_forwarded_for_addr:
                     remote_addr = x_forwarded_for_addr
             _logger.info('remote_addr : ' + str(remote_addr))
             if remote_addr not in parameters.value:
                 _logger.info('unauthorized remote_addr : ' + str(remote_addr))
                 return Response("Not authorized", status=400)
+        old_password, new_password = operator.itemgetter(
+            'old_pwd', 'new_pwd')(
+                dict(map(operator.itemgetter('name', 'value'), fields)))
         try:
-            dispatch_rpc('db', 'change_admin_password', [master_pwd, master_pwd_new])
-            return http.local_redirect('/web/database/manager')
-        except Exception as e:
-            error = "Master password update error: %s" % (str(e) or repr(e))
-            return self._render_template(error=error)
+            return request.session.proxy("db").change_admin_password(old_password, new_password)
+        except openerp.exceptions.AccessDenied:
+            return {'error': 'AccessDenied', 'title': _('Change Password')}
+        except Exception:
+            return {'error': _('Error, password not changed !'), 'title': _('Change Password')}

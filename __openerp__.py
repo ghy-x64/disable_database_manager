@@ -9,11 +9,7 @@
     'category': 'Apps',
     'version': '1.0',
     'depends': [
-        'base_setup',
         'web',
-    ],
-    'data': [
-        'views/res_config_settings_view.xml',
     ],
     'installable': True,
 }
