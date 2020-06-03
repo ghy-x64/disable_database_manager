@@ -20,5 +20,5 @@ class ResConfigSettings(models.TransientModel):
     def set_values(self):
         super(ResConfigSettings, self).set_values()
         ICPSudo = self.env['ir.config_parameter'].sudo()
-        ICPSudo.set_param('disable_database_manager.customized_sale_module', self.database_manager_whitelist)
+        ICPSudo.set_param('disable_database_manager.database_manager_whitelist', self.database_manager_whitelist)
 
