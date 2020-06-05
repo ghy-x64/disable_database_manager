@@ -2,6 +2,7 @@ import odoo.http as http
 import odoo
 from odoo import SUPERUSER_ID
 from odoo import _
+from odoo import api
 from odoo.http import request
 from odoo.exceptions import AccessError
 from odoo.http import Response
@@ -14,6 +15,19 @@ _logger = logging.getLogger(__name__)
 
 
 class Database(Database):
+
+    # HACK https://github.com/odoo/odoo/issues/24183
+    # TODO Remove in v12, and use normal odoo.http.request to get details
+    @api.model_cr
+    def _register_hook(self):
+        """🐒-patch XML-RPC controller to know remote address."""
+        original_fn = wsgi_server.application_unproxied
+
+        def _patch(environ, start_response):
+            current_thread().environ = environ
+            return original_fn(environ, start_response)
+
+        wsgi_server.application_unproxied = _patch
 
     @http.route('/web/database/manager', type='http', auth="none")
     def manager(self, **kw):
