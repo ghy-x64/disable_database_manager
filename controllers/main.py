@@ -47,7 +47,7 @@ class Database(Database):
 
     @http.route('/web/database/manager', type='http', auth="none")
     def manager(self, **kw):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = request.httprequest.environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
@@ -66,7 +66,7 @@ class Database(Database):
 
     @http.route('/web/database/create', type='json', auth="none")
     def create(self, fields):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = request.httprequest.environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
@@ -90,7 +90,7 @@ class Database(Database):
 
     @http.route('/web/database/duplicate', type='json', auth="none")
     def duplicate(self, fields):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = request.httprequest.environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
@@ -113,7 +113,7 @@ class Database(Database):
 
     @http.route('/web/database/drop', type='json', auth="none")
     def drop(self, fields):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = request.httprequest.environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
@@ -140,7 +140,7 @@ class Database(Database):
 
     @http.route('/web/database/backup', type='http', auth="none")
     def backup(self, backup_db, backup_pwd, token, backup_format='zip'):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = request.httprequest.environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
@@ -169,7 +169,7 @@ class Database(Database):
 
     @http.route('/web/database/restore', type='http', auth="none")
     def restore(self, db_file, restore_pwd, new_db, mode):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = request.httprequest.environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
@@ -190,7 +190,7 @@ class Database(Database):
 
     @http.route('/web/database/change_password', type='json', auth="none")
     def change_password(self, fields):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = request.httprequest.environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in request.httprequest.environ:
