@@ -17,7 +17,7 @@ class Database(Database):
 
     @http.route('/web/database/manager', type='http', auth="none")
     def manager(self, **kw):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = current_thread().environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
@@ -34,7 +34,7 @@ class Database(Database):
 
     @http.route('/web/database/create', type='http', auth="none", methods=['POST'], csrf=False)
     def create(self, master_pwd, name, lang, password, **post):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = current_thread().environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
@@ -59,7 +59,7 @@ class Database(Database):
 
     @http.route('/web/database/duplicate', type='http', auth="none", methods=['POST'], csrf=False)
     def duplicate(self, master_pwd, name, new_name):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = current_thread().environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
@@ -81,7 +81,7 @@ class Database(Database):
 
     @http.route('/web/database/drop', type='http', auth="none", methods=['POST'], csrf=False)
     def drop(self, master_pwd, name):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = current_thread().environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
@@ -102,7 +102,7 @@ class Database(Database):
 
     @http.route('/web/database/backup', type='http', auth="none", methods=['POST'], csrf=False)
     def backup(self, master_pwd, name, backup_format = 'zip'):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = current_thread().environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
@@ -131,7 +131,7 @@ class Database(Database):
 
     @http.route('/web/database/restore', type='http', auth="none", methods=['POST'], csrf=False)
     def restore(self, master_pwd, backup_file, name, copy=False):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = current_thread().environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
@@ -158,7 +158,7 @@ class Database(Database):
 
     @http.route('/web/database/change_password', type='http', auth="none", methods=['POST'], csrf=False)
     def change_password(self, master_pwd, master_pwd_new):
-        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.customized_sale_module')], limit=1)
+        parameters = request.env['ir.config_parameter'].sudo().search([('key','=','disable_database_manager.database_manager_whitelist')], limit=1)
         if len(parameters) > 0:
             remote_addr = current_thread().environ["REMOTE_ADDR"]
             if 'HTTP_X_FORWARDED_FOR' in current_thread().environ:
